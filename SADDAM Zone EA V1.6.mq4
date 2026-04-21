@@ -187,7 +187,7 @@ void OnTick()
         }
 
       // Step 5: Exit Hedging Mode
-      if(TotalLots(OP_BUY) + TotalLots(OP_SELL) <= MinLots)
+      if(MathMax(TotalLots(OP_BUY), TotalLots(OP_SELL)) <= MinLots)
         {
          IsHedgingMode = false;
          Print("Hedge reduction completed. Returning to normal strategy.");

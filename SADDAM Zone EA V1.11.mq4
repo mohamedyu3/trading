@@ -5,6 +5,7 @@
 
 #property copyright "MR.dollarEA"
 #property link      "mrdollar.cs@gmail.com"
+#property version   "1.11"
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -200,7 +201,6 @@ void OnTick()
          if(orderscnt() > 0 && (TimeCurrent() - LastCurrentOrderInfo("Time") >= WaitingMinutes * 60 || transfair))
            {
             bool reduced = false;
-            datetime hedge_T1 = TimeCurrent();
             double hedge_profit = 0;
             
             double lastBuyPrice = LastCurrentOrderInfo("Price", OP_BUY);
@@ -209,17 +209,21 @@ void OnTick()
             // Universal Reduction Logic: If price moves in favor of any side
             if(lastBuyPrice > 0 && Bid - lastBuyPrice >= PipsToTransfair * point)
               {
-               CloseAll(OP_BUY);
-               hedge_profit = TotalClosedProfit(hedge_T1, OP_BUY);
-               ClosePercentOfLoss(OP_SELL, hedge_profit); // Step 2: partial close SELL
-               reduced = true;
+                hedge_profit = CloseSelectedWinners(OP_BUY);
+                if(hedge_profit > 0)
+                  {
+                   ClosePercentOfLoss(OP_SELL, hedge_profit);
+                   reduced = true;
+                  }
               }
             else if(lastSellPrice > 0 && lastSellPrice - Ask >= PipsToTransfair * point)
               {
-               CloseAll(OP_SELL);
-               hedge_profit = TotalClosedProfit(hedge_T1, OP_SELL);
-               ClosePercentOfLoss(OP_BUY, hedge_profit); // Step 2: partial close BUY
-               reduced = true;
+                hedge_profit = CloseSelectedWinners(OP_SELL);
+                if(hedge_profit > 0)
+                  {
+                   ClosePercentOfLoss(OP_BUY, hedge_profit);
+                   reduced = true;
+                  }
               }
 
             if(reduced)
@@ -235,7 +239,6 @@ void OnTick()
 
    
    double newLot,TP=0,SL=0,price,newLotPending,profit;
-   datetime T1;
    int ticket;
 
    ModifyAllOrdersTP(OP_SELL);
@@ -300,12 +303,14 @@ void OnTick()
       transfair=false;
       if(LastCurrentOrderInfo("Type")==OP_BUY)
         {
+
          if(Bid-LastCurrentOrderInfo("Price")>=PipsToTransfair*point)
            {
-            T1=TimeCurrent();
-            CloseAll(OP_BUY);
-            profit=TotalClosedProfit(T1,OP_BUY);
-            ClosePercentOfLoss(OP_SELL,profit);
+            profit = CloseSelectedWinners(OP_BUY);
+            if(profit > 0)
+              {
+                ClosePercentOfLoss(OP_SELL,profit);
+              }
             if(TakeProfit==0){TP=0;}else{TP=Ask+TakeProfit*point;}
             if(StopLoss!=0)SL=Ask-StopLoss*point;
             newLot=NormalizeDouble(TotalLots(OP_SELL)*Multiplier,lot_digits);
@@ -326,10 +331,11 @@ void OnTick()
         {
          if(LastCurrentOrderInfo("Price")-Ask>=PipsToTransfair*point)
            {
-            T1=TimeCurrent();
-            CloseAll(OP_SELL);
-            profit=TotalClosedProfit(T1,OP_SELL);
-            ClosePercentOfLoss(OP_BUY,profit);
+            profit = CloseSelectedWinners(OP_SELL);
+            if(profit > 0)
+              {
+                ClosePercentOfLoss(OP_BUY,profit);
+              }
 
             if(TakeProfit==0){TP=0;}else{TP=Bid-TakeProfit*point;}
             if(StopLoss!=0)SL=Bid+StopLoss*point;
@@ -584,43 +590,64 @@ double TotalLots(int type)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+double CloseSelectedWinners(int type)
+  {
+   double totalProf=0;
+   for(int i=OrdersTotal()-1;i>=0;i--)
+     {
+      if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES))
+        {
+         if(OrderSymbol()==Symbol() && OrderMagicNumber()==MagicNumber && OrderType()==type)
+           {
+            if(OrderProfit()>0)
+              {
+               double p = OrderProfit();
+               double pr = Bid; if(type==OP_SELL) pr = Ask;
+               if(OrderClose(OrderTicket(),OrderLots(),pr,3*P))
+                 {
+                  totalProf += p;
+                 }
+              }
+           }
+        }
+     }
+   return(totalProf);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void ClosePercentOfLoss(int type,double closedprofit)
   {
-   double profit=TotalProfit(type);
-   double profitToclose=closedprofit*PF_Percent/100; // 500 USD
-
-   double lotsToClose=TotalLots(type);
+   if(closedprofit <= 0) return;
+   double profitToclose=closedprofit*PF_Percent/100;
 
    for(int i=OrdersTotal()-1;i>=0;i--)
      {
-      bool select=OrderSelect(i,SELECT_BY_POS,MODE_TRADES);
-      if(OrderSymbol()==Symbol() && OrderMagicNumber()==MagicNumber && OrderType()==type)
+      if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES))
         {
-         double orderprofit=OrderProfit();
-
-         double percentOfLotsToClose=MathAbs(profitToclose/orderprofit)*100;
-         double lots;
-         if(percentOfLotsToClose>=100)lots=OrderLots();
-         else lots=OrderLots()*percentOfLotsToClose/100;
-
-         if(OrderType()==OP_BUY)
+         if(OrderSymbol()==Symbol() && OrderMagicNumber()==MagicNumber && OrderType()==type && OrderProfit()<0)
            {
-            bool close=OrderClose(OrderTicket(),lots,Bid,3*P);
-           }
-         if(OrderType()==OP_SELL)
-           {
-            close=OrderClose(OrderTicket(),lots,Ask,3*P);
-           }
+            double orderprofit=OrderProfit();
+            double orderlots=OrderLots();
 
-         if(close)
-           {
-            profitToclose+=orderprofit;
-           }
-         if(profitToclose<=0)break;
+            double percentOfLotsToClose=MathAbs(profitToclose/orderprofit)*100;
+            double lots;
+            if(percentOfLotsToClose>=100)lots=orderlots;
+            else lots=NormalizeDouble(orderlots*percentOfLotsToClose/100, lot_digits);
 
+            if(lots < MarketInfo(Symbol(), MODE_MINLOT)) continue;
+
+            double pr = Bid; if(type==OP_SELL) pr = Ask;
+            if(OrderClose(OrderTicket(),lots,pr,3*P))
+              {
+               double realizedLoss = orderprofit * (lots / orderlots);
+               profitToclose += realizedLoss; // realizedLoss is negative, reducing profitToclose
+              }
+            
+            if(profitToclose<=0)break;
+           }
         }
      }
-
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -722,9 +749,3 @@ void DeleteAllPendingOrders()
         }
      }
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
