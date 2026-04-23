@@ -209,30 +209,39 @@ void ManageMagicProcess(int magic, datetime &startTime, bool isMain=false)
    ModifyAllOrdersTP_m(OP_SELL, magic);
    ModifyAllOrdersTP_m(OP_BUY, magic);
 
-   // 2. Closure Logic
-   if(cnt > 0)
-     {
-      double prof = TotalGainedProfit(startTime, magic) + TotalProfit(magic);
-      if((TARGET != 0 && prof >= TARGET) || (EnableProfitUSD && TotalProfit(magic) >= TotalProfitUSD))
+      // 2. Closure Logic
+      if(cnt > 0)
         {
-         CloseAll(-1, magic);
-         startTime = TimeCurrent();
-         return;
+         double prof = TotalGainedProfit(startTime, magic) + TotalProfit(magic);
+         if((TARGET != 0 && prof >= TARGET) || (EnableProfitUSD && TotalProfit(magic) >= TotalProfitUSD))
+           {
+            CloseAll(-1, magic);
+            startTime = TimeCurrent();
+            return;
+           }
+         
+         if(CloseAtMaxTrades && MaxTrades != 0 && cnt >= MaxTrades)
+           {
+            CloseAll(-1, magic);
+            startTime = TimeCurrent();
+            return;
+           }
+       
+         // Cleanup: If no market orders exist but pending orders remain, clear them to start a fresh cycle
+         if((orderscnt_m(magic, OP_BUY) + orderscnt_m(magic, OP_SELL) == 0) && cnt > 0)
+           {
+            CloseAll(-1, magic);
+            return;
+           }
+
+         // Chain-break reset: If one side of the grid is completely missing but multiple orders exist
+         if(cnt > 1 && ((orderscnt_m(magic, OP_BUY) + orderscnt_m(magic, OP_BUYSTOP) == 0) || 
+                        (orderscnt_m(magic, OP_SELL) + orderscnt_m(magic, OP_SELLSTOP) == 0)))
+           {
+            CloseAll(-1, magic);
+            return;
+           }
         }
-      
-      if(CloseAtMaxTrades && MaxTrades != 0 && cnt >= MaxTrades)
-        {
-         CloseAll(-1, magic);
-         startTime = TimeCurrent();
-         return;
-        }
-    
-      if(!isMain && (orderscnt_m(magic, OP_BUY) + orderscnt_m(magic, OP_SELL) == 0) && cnt > 0)
-        {
-         CloseAll(-1, magic);
-         return;
-        }
-     }
 
    // 3. Grid Management (Pending Orders)
    if(cnt > 0 && (cnt < MaxTrades || MaxTrades == 0))
