@@ -1,21 +1,27 @@
-# SADDAM Zone EA V1.12 - Modification Summary
+# SADDAM Zone EA V1.12 - Modification Summary (Clean Hybrid)
 
-This version introduces stability fixes for the Hedging Mode and a new stacking feature for better recovery.
+This version is a direct upgrade of the stable **V1.11**, specifically designed to add secondary profit cycles during hedging without changing the original Normal Mode behavior.
 
-## 1. Panic Reset Protection (Crash Fix)
-- **Problem:** In V1.11 and earlier, if one side of the market became empty (e.g., all SELL orders were closed during reduction) while the other side still had trades, the EA would panic and close everything. This caused the steep drops seen in strategy tester graphs.
-- **Fix:** Added `!IsHedgingMode` guard to the reset logic. The EA will now correctly allow one side to reach zero lots during the reduction process without wiping the account.
-- **Benefit:** Smooth balance curve and preserved hedge positions during recovery.
+## 1. Core Stability (V1.11 Base)
+- **Untouched Normal Mode:** The grid logic, TP synchronization (`ModifyAllOrdersTP`), and cycle management for the main `MagicNumber` are identical to version 1.11.
+- **Reliability:** By using V1.11 as a template, we ensure that the "Normal Mode" remains as stable and predictable as you expect.
 
-## 2. Secondary Magic Stacking (`magicNumbr2`)
-- **New Feature:** You can now enable a secondary cycle that starts only when the main EA is in Hedging Mode.
-- **Automatic Trigger:** The EA monitors the price from the moment Hedging Mode is activated. If the price moves by `Step2` pips (e.g., 50 pips), it opens the first trade of a new cycle with `magicNumbr2`.
-- **Isolation:** This new cycle is managed separately using the `magicNumbr2` identifier. This allows you to generate new profits from the current trend while the original `MagicNumber` trades are locked in the hedge.
+## 2. New: Autonomous Secondary Cycles (Hedge Mode Only)
+- **Activation:** Secondary cycles are only active when the main `MagicNumber` trades are in **Hedging Mode** (lots >= `MaxLots`).
+- **Trigger Condition:** A new cycle only starts if the price enters the "Hedge Zone" (the gap between the main Buy and Sell lines) with a buffer of `Step2` pips.
+  - Logic: `Bid < (Last Buy Price - Step2)` AND `Bid > (Last Sell Price + Step2)`.
+- **Automatic Magic Numbers:** The EA generates secondary magic numbers automatically (`MagicNumber + 1`, `+ 2`, etc.).
+- **Scaling:** `MaxSecondaryCycles` (Default: 3) controls how many autonomous grids can run simultaneously within the hedge zone.
+- **Benefit:** Allows you to generate fresh profits from price fluctuations inside the hedge zone while the main trapped trades are waiting to be reduced.
 
-## 3. New Input Parameters
-- **EnableMagic2:** Set to `true` to enable the stacking feature.
-- **Step2:** The distance in pips required to trigger the secondary cycle.
-- **magicNumbr2:** the numerical ID for the secondary trades (should be different from the main `MagicNumber`).
+## 3. Improved Safety: Smart Order Send
+- **Error 130 Prevention:** All trading actions (including the new secondary cycles) now use a "Smart" wrapper.
+- **Market Catch-up:** If the price moves too fast for a pending order (Buy Stop or Sell Stop), the EA automatically converts it to a Market Order (`BUY` or `SELL`) to prevent Error 130 and keep the martingale chain moving.
+- **StopLevel Validation:** Automatically ensures all TP and SL levels are valid according to your broker's minimum distance requirements.
+
+## 4. Technical Enhancements
+- **Multi-Magic Helpers:** All internal functions (`orderscnt`, `TotalLots`, `TotalProfit`) have been upgraded to support specific magic numbers (`_m versions`).
+- **Autonomous Sub-Processes:** `ManageSecondaryProcess` handles the scaling cycles independently, so one cycle hitting its target does not reset or close the main hedge.
 
 ---
-**Recommendation:** Use **SADDAM Zone EA V1.12.mq4** for all future testing. It is the most stable version and includes the protection against account wipes during hedging.
+**Summary:** V1.12 is the most robust version yet, combining the proven stability of the V1.11 core with the advanced scaling capabilities needed for long-term hedging.
