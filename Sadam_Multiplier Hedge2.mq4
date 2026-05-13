@@ -36,6 +36,7 @@ extern int HedgePrecentLot=100;
  int Lot_Digits;
  
  datetime Time0;                           
+ datetime StartCycleTime;
  int init()
 {
   if(MarketInfo(Symbol(),MODE_MINLOT)<0.1)Lot_Digits=2;
@@ -61,6 +62,7 @@ return(0);
 
  void deinit() {
     Comment("");
+    ObjectsDeleteAll(0, "Panel_Info_");
   }
 
  int orderscnt(int type,string comment){
@@ -153,12 +155,16 @@ return(0);
     if(UseMoneyManagement)Lots = LotManage();
        
           
-     if (orderscnt(OP_BUY,"")+orderscnt(OP_SELL,"")<1){
+      if (orderscnt(OP_BUY,"")+orderscnt(OP_SELL,"")<1){
          if(OrderSend(Symbol(),OP_BUY,Lots,NormalizeDouble(Ask,Digits),3*Q,0,0,"MR.dollar EA",MagicNumber,0,Blue) < 0) Print("OrderSend failed with error #", GetLastError());
          if(OrderSend(Symbol(),OP_SELL,Lots,NormalizeDouble(Bid,Digits),3*Q,0,0,"MR.dollar EA",MagicNumber,0,Red) < 0) Print("OrderSend failed with error #", GetLastError()); 
          PlaySound("Alert.wav");
       Time0=Time[0];FirstHedge=0;
+      StartCycleTime = TimeCurrent();
     }
+    
+    DrawAccountInfo(StartCycleTime);
+    
     return(0);
   }
     
@@ -281,6 +287,106 @@ return(0);
 }
 
 
- //+---------------------------------------------------------------------------------+
- 
-   
+  //+---------------------------------------------------------------------------------+
+void DrawAccountInfo(datetime StartCycleTime_)
+{
+    int X_Shift = 10;
+    int Y_Shift = 80; 
+    int Added_Y = 0;
+    int LabelWidth = 80;
+    int ValueWidth = 80;
+    int RowHeight = 22;
+
+    // Row 1: Balance
+    CreatePanel("Panel_Info_1", OBJ_EDIT, "Balance", X_Shift, Y_Shift + Added_Y, LabelWidth, 20, C'45,45,45', White, White, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_2", OBJ_EDIT, DoubleToStr(AccountBalance(), 2), X_Shift + LabelWidth, Y_Shift + Added_Y, ValueWidth, 20, C'30,30,30', White, Green, 8, true, false, 0, ALIGN_CENTER);
+    Added_Y += RowHeight;
+
+    // Row 2: Equity
+    CreatePanel("Panel_Info_3", OBJ_EDIT, "Equity", X_Shift, Y_Shift + Added_Y, LabelWidth, 20, C'45,45,45', White, White, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_4", OBJ_EDIT, DoubleToStr(AccountEquity(), 2), X_Shift + LabelWidth, Y_Shift + Added_Y, ValueWidth, 20, C'30,30,30', White, Green, 8, true, false, 0, ALIGN_CENTER);
+    Added_Y += RowHeight;
+
+    // Row 3: Profit
+    CreatePanel("Panel_Info_5", OBJ_EDIT, "Profit", X_Shift, Y_Shift + Added_Y, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_6", OBJ_EDIT, DoubleToStr(AccountProfit(), 2), X_Shift + LabelWidth, Y_Shift + Added_Y, ValueWidth, 20, Black, White, (AccountProfit() >= 0 ? Green : Red), 8, true, false, 0, ALIGN_CENTER);
+    Added_Y += RowHeight + 5; // Small gap
+
+    // Lots Info
+    double bLots = TotalLots(OP_BUY);
+    double sLots = TotalLots(OP_SELL);
+    
+    // Row 4: Buy Lots
+    CreatePanel("Panel_Info_7", OBJ_EDIT, "Buy Lots", X_Shift, Y_Shift + Added_Y, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_8", OBJ_EDIT, DoubleToStr(bLots, 2), X_Shift + LabelWidth, Y_Shift + Added_Y, ValueWidth, 20, Black, White, Blue, 8, true, false, 0, ALIGN_CENTER);
+    Added_Y += RowHeight;
+
+    // Row 5: Sell Lots
+    CreatePanel("Panel_Info_9", OBJ_EDIT, "Sell Lots", X_Shift, Y_Shift + Added_Y, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_10", OBJ_EDIT, DoubleToStr(sLots, 2), X_Shift + LabelWidth, Y_Shift + Added_Y, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
+    Added_Y += RowHeight;
+
+    // Row 6: Net Lots
+    CreatePanel("Panel_Info_11", OBJ_EDIT, "Net Lots", X_Shift, Y_Shift + Added_Y, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_12", OBJ_EDIT, DoubleToStr(bLots - sLots, 2), X_Shift + LabelWidth, Y_Shift + Added_Y, ValueWidth, 20, Black, White, (bLots - sLots >= 0 ? Blue : Red), 8, true, false, 0, ALIGN_CENTER);
+    Added_Y += RowHeight + 5; // Small gap
+
+    // Row 7: Buy Orders
+    CreatePanel("Panel_Info_13", OBJ_EDIT, "Buy Orders", X_Shift, Y_Shift + Added_Y, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_14", OBJ_EDIT, IntegerToString(orderscnt(OP_BUY, "")), X_Shift + LabelWidth, Y_Shift + Added_Y, ValueWidth, 20, Black, White, Blue, 8, true, false, 0, ALIGN_CENTER);
+    Added_Y += RowHeight;
+
+    // Row 8: Sell Orders
+    CreatePanel("Panel_Info_15", OBJ_EDIT, "Sell Orders", X_Shift, Y_Shift + Added_Y, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_16", OBJ_EDIT, IntegerToString(orderscnt(OP_SELL, "")), X_Shift + LabelWidth, Y_Shift + Added_Y, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
+}
+
+
+void CreatePanel(string name, ENUM_OBJECT Type, string text, int XDistance, int YDistance, int Width, int Hight,
+                 color BGColor_, color InfoColor, color boarderColor, int fontsize, bool readonly = false, bool Obj_Selectable = false, int Corner = 0, ENUM_ALIGN_MODE Align = ALIGN_LEFT)
+{
+    if(ObjectFind(0, name) == -1)
+    {
+        ObjectCreate(0, name, Type, 0, 0, 0);
+        ObjectSetInteger(0, name, OBJPROP_XDISTANCE, XDistance);
+        ObjectSetInteger(0, name, OBJPROP_YDISTANCE, YDistance);
+        ObjectSetInteger(0, name, OBJPROP_XSIZE, Width);
+        ObjectSetInteger(0, name, OBJPROP_YSIZE, Hight);
+        ObjectSetString(0, name, OBJPROP_TEXT, text);
+        ObjectSetString(0, name, OBJPROP_FONT, "Arial Bold");
+        ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fontsize);
+        ObjectSetInteger(0, name, OBJPROP_CORNER, Corner);
+        ObjectSetInteger(0, name, OBJPROP_COLOR, InfoColor);
+        ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+        ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, boarderColor);
+        ObjectSetInteger(0, name, OBJPROP_BGCOLOR, BGColor_);
+        ObjectSetInteger(0, name, OBJPROP_SELECTABLE, Obj_Selectable);
+        ObjectSetInteger(0, name, OBJPROP_BACK, false);
+
+        if(Type == OBJ_EDIT)
+        {
+            ObjectSetInteger(0, name, OBJPROP_ALIGN, Align);
+            ObjectSetInteger(0, name, OBJPROP_READONLY, readonly);
+        }
+    }
+    if(ObjectGetString(0, name, OBJPROP_TEXT) != text)
+    {
+        ObjectSetString(0, name, OBJPROP_TEXT, text);
+    }
+}
+
+double TotalLots(int type)
+{
+    double lots = 0;
+    for(int i = OrdersTotal() - 1; i >= 0; i--)
+    {
+        if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
+        {
+            if(OrderSymbol() == Symbol() && OrderMagicNumber() == MagicNumber && OrderType() == type)
+            {
+                lots += OrderLots();
+            }
+        }
+    }
+    return(lots);
+}

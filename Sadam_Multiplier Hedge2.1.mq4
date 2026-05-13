@@ -293,43 +293,56 @@ void DrawAccountInfo(datetime StartCycleTime_)
     int X_Shift = 10;
     int Y_Shift = 20; 
     int Added_X = 0;
-    int Gap = 5;
-    int LabelWidth = 85;
-    int ValueWidth = 65;
-    int ItemSpacing = 10;
+    int LabelWidth = 80;
+    int ValueWidth = 60;
+    int ItemSpacing = 8;
 
-    CreatePanel("Panel_Info_1", OBJ_EDIT, "BUY Lots", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    // --- Group 1: Account Info ---
+    CreatePanel("Panel_Info_1", OBJ_EDIT, "Balance", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
     Added_X += LabelWidth;
-    CreatePanel("Panel_Info_2", OBJ_EDIT, DoubleToStr(TotalLots(OP_BUY), 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
+    CreatePanel("Panel_Info_2", OBJ_EDIT, DoubleToStr(AccountBalance(), 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Green, 8, true, false, 0, ALIGN_CENTER);
     Added_X += ValueWidth + ItemSpacing;
 
-    CreatePanel("Panel_Info_3", OBJ_EDIT, "SELL Lots", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_3", OBJ_EDIT, "Equity", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
     Added_X += LabelWidth;
-    CreatePanel("Panel_Info_4", OBJ_EDIT, DoubleToStr(TotalLots(OP_SELL), 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
+    CreatePanel("Panel_Info_4", OBJ_EDIT, DoubleToStr(AccountEquity(), 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Green, 8, true, false, 0, ALIGN_CENTER);
     Added_X += ValueWidth + ItemSpacing;
 
-    CreatePanel("Panel_Info_5", OBJ_EDIT, "Time Mins", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_5", OBJ_EDIT, "Profit", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
     Added_X += LabelWidth;
-    double lastTime = LastCurrentOrderInfo("Time");
-    string timeStr = "0.0";
-    if(lastTime > 0) timeStr = DoubleToStr((TimeCurrent() - lastTime) / 60, 1);
-    CreatePanel("Panel_Info_6", OBJ_EDIT, timeStr, X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
+    CreatePanel("Panel_Info_6", OBJ_EDIT, DoubleToStr(AccountProfit(), 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, (AccountProfit() >= 0 ? Green : Red), 8, true, false, 0, ALIGN_CENTER);
+    Added_X += ValueWidth + ItemSpacing + 10; // Extra gap between groups
+
+    // --- Group 2: Lots Info ---
+    double bLots = TotalLots(OP_BUY);
+    double sLots = TotalLots(OP_SELL);
+    
+    CreatePanel("Panel_Info_7", OBJ_EDIT, "Buy Lots", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    Added_X += LabelWidth;
+    CreatePanel("Panel_Info_8", OBJ_EDIT, DoubleToStr(bLots, 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Blue, 8, true, false, 0, ALIGN_CENTER);
     Added_X += ValueWidth + ItemSpacing;
 
-    CreatePanel("Panel_Info_7", OBJ_EDIT, "Cycle Profit", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_9", OBJ_EDIT, "Sell Lots", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
     Added_X += LabelWidth;
-    CreatePanel("Panel_Info_8", OBJ_EDIT, DoubleToStr(TotalGainedProfit(StartCycleTime_), 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
+    CreatePanel("Panel_Info_10", OBJ_EDIT, DoubleToStr(sLots, 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
     Added_X += ValueWidth + ItemSpacing;
 
-    CreatePanel("Panel_Info_9", OBJ_EDIT, "Open Profit", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_11", OBJ_EDIT, "Net Lots", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
     Added_X += LabelWidth;
-    CreatePanel("Panel_Info_10", OBJ_EDIT, DoubleToStr(TotalAccountProfit(), 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
+    CreatePanel("Panel_Info_12", OBJ_EDIT, DoubleToStr(bLots - sLots, 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, (bLots - sLots >= 0 ? Blue : Red), 8, true, false, 0, ALIGN_CENTER);
+    Added_X += ValueWidth + ItemSpacing + 10; // Extra gap
+
+    // --- Group 3: Orders Count ---
+    CreatePanel("Panel_Info_13", OBJ_EDIT, "Buy Orders", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    Added_X += LabelWidth;
+    CreatePanel("Panel_Info_14", OBJ_EDIT, IntegerToString(orderscnt(OP_BUY, "")), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Blue, 8, true, false, 0, ALIGN_CENTER);
     Added_X += ValueWidth + ItemSpacing;
 
-    CreatePanel("Panel_Info_11", OBJ_EDIT, "Total", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
+    CreatePanel("Panel_Info_15", OBJ_EDIT, "Sell Orders", X_Shift + Added_X, Y_Shift, LabelWidth, 20, Black, White, Black, 8, true, false, 0, ALIGN_LEFT);
     Added_X += LabelWidth;
-    CreatePanel("Panel_Info_12", OBJ_EDIT, DoubleToStr(TotalGainedProfit(StartCycleTime_) + TotalAccountProfit(), 2), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
+    CreatePanel("Panel_Info_16", OBJ_EDIT, IntegerToString(orderscnt(OP_SELL, "")), X_Shift + Added_X, Y_Shift, ValueWidth, 20, Black, White, Red, 8, true, false, 0, ALIGN_CENTER);
 }
+
 
 void CreatePanel(string name, ENUM_OBJECT Type, string text, int XDistance, int YDistance, int Width, int Hight,
                  color BGColor_, color InfoColor, color boarderColor, int fontsize, bool readonly = false, bool Obj_Selectable = false, int Corner = 0, ENUM_ALIGN_MODE Align = ALIGN_LEFT)
