@@ -183,21 +183,21 @@ void OnTick()
       // Scenario #2: Hedging Mode - Crisis Management
       
       // Step 0: Ensure 1:1 Balance (Continuous Lock)
-      double buyLots = TotalLots(OP_BUY);
-      double sellLots = TotalLots(OP_SELL);
+      double buyLots = TotalLots(OP_BUY, true); // Exclude shields from balance check
+      double sellLots = TotalLots(OP_SELL, true);
       double balanceDiff = buyLots - sellLots;
       
       if(MathAbs(balanceDiff) > 0.001)
         {
          ExecuteLock();
-         buyLots = TotalLots(OP_BUY);
-         sellLots = TotalLots(OP_SELL);
+         buyLots = TotalLots(OP_BUY, true);
+         sellLots = TotalLots(OP_SELL, true);
         }
 
       // Maintain Pending Grid during Hedge (Dynamic Protection)
       if(orderscnt(OP_BUYSTOP) == 0 && orderscnt(OP_SELLSTOP) == 0)
         {
-         double p_lot = NormalizeDouble(MathMax(buyLots, sellLots) * 0.1, lot_digits);
+         double p_lot = NormalizeDouble(MathMax(buyLots, sellLots) * 1.0, lot_digits); // Full protection (100%)
          if(p_lot < MinLots) p_lot = MinLots;
          double p_price;
          int lastType = (int)LastCurrentOrderInfo("Type");
@@ -205,24 +205,23 @@ void OnTick()
          if(lastType == OP_BUY) // Price went up, we locked with BUY, need SELLSTOP below
            {
             p_price = LastCurrentOrderInfo("Price", OP_BUY) - Step * point;
-            int t1 = OrderSend(Symbol(), OP_SELLSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Grid", MagicNumber, 0, Red);
+            int t1 = OrderSend(Symbol(), OP_SELLSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Shield", MagicNumber, 0, Red);
            }
          else if(lastType == OP_SELL) // Price went down, we locked with SELL, need BUYSTOP above
            {
             p_price = LastCurrentOrderInfo("Price", OP_SELL) + Step * point;
-            int t2 = OrderSend(Symbol(), OP_BUYSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Grid", MagicNumber, 0, Blue);
+            int t2 = OrderSend(Symbol(), OP_BUYSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Shield", MagicNumber, 0, Blue);
            }
         }
 
-      // Step 5: Exit Hedging Mode (Clean Start Implementation)
+      // Step 5: Exit Hedging Mode (Seamless Transition)
       if(MathMax(buyLots, sellLots) <= MinLots + 0.001)
         {
-         CloseAll(OP_BUY);
-         CloseAll(OP_SELL);
-         DeleteAllPendingOrders();
+         DeleteAllPendingOrders(); // Clear hedge pending orders
          IsHedgingMode = false;
+         JustExitedHedge = true; // Signal main logic to use current price for next pending order
          transfair = false; 
-         Print("Hedge reduction completed. Clean Start performed successfully.");
+         Print("Hedge reduction completed. Seamless transition to normal grid performed.");
          return; 
         }
       else
@@ -608,7 +607,7 @@ double TotalProfit(int type=-1)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-double TotalLots(int type)
+double TotalLots(int type, bool excludeShield = false)
   {
    double lots;
    for(int i=OrdersTotal()-1;i>=0;i--)
@@ -616,6 +615,7 @@ double TotalLots(int type)
       bool select=OrderSelect(i,SELECT_BY_POS,MODE_TRADES);
       if(OrderSymbol()==Symbol() && OrderMagicNumber()==MagicNumber && OrderType()==type)
         {
+         if(excludeShield && OrderComment() == "Hedge Shield") continue;
          lots+=OrderLots();
         }
      }
@@ -628,7 +628,6 @@ void ClosePercentOfLoss(int type,double closedprofit)
   {
    double profit=TotalProfit(type);
    double currentPF = PF_Percent;
-   if(IsHedgingMode) currentPF = 100.0; // تسريع التخفيف أثناء الهيدج
    double profitToclose = closedprofit * currentPF / 100; 
 
    double lotsToClose=TotalLots(type);
@@ -704,23 +703,17 @@ void CreatePanel(string name,ENUM_OBJECT Type,string text,int XDistance,int YDis
 //+------------------------------------------------------------------+
 void ExecuteLock()
   {
-   double buy_lots = TotalLots(OP_BUY);
-   double sell_lots = TotalLots(OP_SELL);
+   // Use true to ignore 'Hedge Shield' orders during balance check
+   double buy_lots = TotalLots(OP_BUY, true);
+   double sell_lots = TotalLots(OP_SELL, true);
    double volume = NormalizeDouble(MathAbs(buy_lots - sell_lots), lot_digits);
    double min_lot = MarketInfo(Symbol(), MODE_MINLOT);
    int ticket = -1;
 
    if(volume < min_lot) return;
 
-   // If in Hedging Mode, balance by CLOSING excess volume to shrink total size
-   if(IsHedgingMode)
-     {
-      if(buy_lots > sell_lots) CloseVolume(OP_BUY, volume);
-      if(sell_lots > buy_lots) CloseVolume(OP_SELL, volume);
-      return;
-     }
-
-   // In normal mode, balance by OPENING a opposite order to lock
+   // Balance by OPENING a opposite order to lock (Same for Normal and Hedging Mode)
+   // This ensures we always have a 1:1 lock without closing existing trades prematurely
    if(buy_lots > sell_lots)
      {
       ticket = OrderSend(Symbol(), OP_SELL, volume, NormalizeDouble(Bid, Digits), 3 * P, 0, 0, "Hedge Lock", MagicNumber, 0, Red);
@@ -737,7 +730,8 @@ void ExecuteLock()
 void CloseVolume(int type, double volumeToClose)
 {
    double remaining = volumeToClose;
-   for(int i = OrdersTotal() - 1; i >= 0; i--)
+   // Start from 0 to close oldest orders first (Hedge Rolling)
+   for(int i = 0; i < OrdersTotal(); i++)
    {
       if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
       {
