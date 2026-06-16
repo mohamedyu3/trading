@@ -14,6 +14,13 @@ enum order
    SELL
   };
 
+enum ENUM_PENDING_TYPE
+  {
+   PENDING_AUTO,
+   PENDING_BUYSTOP,
+   PENDING_SELLSTOP
+  };
+
 input int MaxTrades=0;
 input bool CloseAtMaxTrades=false;
 input bool RunOnce=false;
@@ -43,12 +50,20 @@ input double  Risk=1;
 input int MagicNumber=2035;
 input double MaxLots=10.0;
 input double MinLots=1.0;
+
+input string hedge_params2=" Dynamic Hedging Level 2 Parameters ";
+input double MaxLots2=20.0;
+input double MinLots2=5.0;
+input int Step2=30;
+input ENUM_PENDING_TYPE lotType2=PENDING_AUTO;
+
 input string hedge_params=" Dynamic Hedging Parameters ";
 
 double point;
 int digits,P;
 int lot_digits;
 bool IsHedgingMode=false;
+bool IsHedgingMode2=false;
 bool JustExitedHedge=false;
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -70,35 +85,44 @@ int OnInit()
       digits=4;
      }
 
-   CreatePanel("Panel_info_Rec1",OBJ_RECTANGLE_LABEL,"",5,280,110,65,Black,Red,Blue,8);
-   CreatePanel("Panel_Info_close",OBJ_BUTTON,"Close All",10,285,100,25,DarkGoldenrod,White,DarkGoldenrod,7,false,false,0,ALIGN_CENTER);
-   CreatePanel("Panel_Info_transfair",OBJ_BUTTON,"TransfairOrders",10,315,100,25,DarkGoldenrod,White,DarkGoldenrod,7,false,false,0,ALIGN_CENTER);
+   // Force drawing all chart objects on top of chart candles/grid (No transparency/covered elements)
+   ChartSetInteger(0, CHART_FOREGROUND, false);
+
+   // Unified Main Charcoal Premium Background Panel
+   CreatePanel("Panel_info_Rec1",OBJ_RECTANGLE_LABEL,"",5,30,270,320,C'20,20,20',White,C'80,80,80',8);
+   
+   // Premium Wider Buttons spanning the panel
+   CreatePanel("Panel_Info_close",OBJ_BUTTON,"Close All",15,265,250,25,DarkGoldenrod,White,DarkGoldenrod,7,false,false,0,ALIGN_CENTER);
+   CreatePanel("Panel_Info_transfair",OBJ_BUTTON,"TransfairOrders",15,300,250,25,DarkGoldenrod,White,DarkGoldenrod,7,false,false,0,ALIGN_CENTER);
    
    return(INIT_SUCCEEDED);
   }
   
   void DrawAccountInfo(datetime StartCycleTime)
    {
-    int X_Shift=10;
+    int X_Shift=15;
     int Y_Shift=40;
     int Added_X=0,Added_Y=0;
-    CreatePanel("Panel_Info_1",OBJ_EDIT,"BUY Lots",X_Shift+Added_X,Y_Shift+Added_Y,80,20,Black,White,Black,10,true,false,0,ALIGN_LEFT);Added_X+=95;
-    CreatePanel("Panel_Info_2",OBJ_EDIT,DoubleToStr(TotalLots(OP_BUY),2),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=95;Added_Y+=35;
     
-    CreatePanel("Panel_Info_3",OBJ_EDIT,"SELL Lots",X_Shift+Added_X,Y_Shift+Added_Y,80,20,Black,White,Black,10,true,false,0,ALIGN_LEFT);Added_X+=95;
-    CreatePanel("Panel_Info_4",OBJ_EDIT,DoubleToStr(TotalLots(OP_SELL),2),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=95;Added_Y+=35;
+    // Label Width is set to 180 to fit the full text perfectly and prevent truncation (...)
+    // Label background is set to the same charcoal color (C'20,20,20') as the panel for a premium seamless look
+    CreatePanel("Panel_Info_1",OBJ_EDIT,"BUY Lots",X_Shift+Added_X,Y_Shift+Added_Y,180,20,C'20,20,20',White,C'20,20,20',10,true,false,0,ALIGN_LEFT);Added_X+=190;
+    CreatePanel("Panel_Info_2",OBJ_EDIT,DoubleToStr(TotalLots(OP_BUY),2),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=190;Added_Y+=35;
     
-    CreatePanel("Panel_Info_5",OBJ_EDIT,"Time Minutes Lots",X_Shift+Added_X,Y_Shift+Added_Y,80,20,Black,White,Black,10,true,false,0,ALIGN_LEFT);Added_X+=95;
-    CreatePanel("Panel_Info_6",OBJ_EDIT,NormalizeDouble((TimeCurrent()-LastCurrentOrderInfo("Time"))/60,1),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=95;Added_Y+=35;
+    CreatePanel("Panel_Info_3",OBJ_EDIT,"SELL Lots",X_Shift+Added_X,Y_Shift+Added_Y,180,20,C'20,20,20',White,C'20,20,20',10,true,false,0,ALIGN_LEFT);Added_X+=190;
+    CreatePanel("Panel_Info_4",OBJ_EDIT,DoubleToStr(TotalLots(OP_SELL),2),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=190;Added_Y+=35;
     
-    CreatePanel("Panel_Info_7",OBJ_EDIT,"Cycle Closed Trades Profit: ",X_Shift+Added_X,Y_Shift+Added_Y,80,20,Black,White,Black,10,true,false,0,ALIGN_LEFT);Added_X+=95;
-    CreatePanel("Panel_Info_8",OBJ_EDIT,TotalGainedProfit(StartCycleTime),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=95;Added_Y+=35;
+    CreatePanel("Panel_Info_5",OBJ_EDIT,"Time Minutes",X_Shift+Added_X,Y_Shift+Added_Y,180,20,C'20,20,20',White,C'20,20,20',10,true,false,0,ALIGN_LEFT);Added_X+=190;
+    CreatePanel("Panel_Info_6",OBJ_EDIT,NormalizeDouble((TimeCurrent()-LastCurrentOrderInfo("Time"))/60,1),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=190;Added_Y+=35;
     
-    CreatePanel("Panel_Info_9",OBJ_EDIT,"Cycle Open Trades Profit: ",X_Shift+Added_X,Y_Shift+Added_Y,80,20,Black,White,Black,10,true,false,0,ALIGN_LEFT);Added_X+=95;
-    CreatePanel("Panel_Info_10",OBJ_EDIT,TotalProfit(),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=95;Added_Y+=35;
+    CreatePanel("Panel_Info_7",OBJ_EDIT,"Cycle Closed Profit",X_Shift+Added_X,Y_Shift+Added_Y,180,20,C'20,20,20',White,C'20,20,20',10,true,false,0,ALIGN_LEFT);Added_X+=190;
+    CreatePanel("Panel_Info_8",OBJ_EDIT,TotalGainedProfit(StartCycleTime),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=190;Added_Y+=35;
     
-    CreatePanel("Panel_Info_11",OBJ_EDIT,"Total : ",X_Shift+Added_X,Y_Shift+Added_Y,80,20,Black,White,Black,10,true,false,0,ALIGN_LEFT);Added_X+=95;
-    CreatePanel("Panel_Info_12",OBJ_EDIT,TotalGainedProfit(StartCycleTime)+TotalProfit(),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=95;Added_Y+=35;
+    CreatePanel("Panel_Info_9",OBJ_EDIT,"Cycle Open Profit",X_Shift+Added_X,Y_Shift+Added_Y,180,20,C'20,20,20',White,C'20,20,20',10,true,false,0,ALIGN_LEFT);Added_X+=190;
+    CreatePanel("Panel_Info_10",OBJ_EDIT,TotalProfit(),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=190;Added_Y+=35;
+    
+    CreatePanel("Panel_Info_11",OBJ_EDIT,"Total :",X_Shift+Added_X,Y_Shift+Added_Y,180,20,C'20,20,20',White,C'20,20,20',10,true,false,0,ALIGN_LEFT);Added_X+=190;
+    CreatePanel("Panel_Info_12",OBJ_EDIT,TotalGainedProfit(StartCycleTime)+TotalProfit(),X_Shift+Added_X,Y_Shift+Added_Y,70,20,Black,White,Red,10,true,false,0,ALIGN_CENTER);Added_X-=190;Added_Y+=35;
    }        
 //+------------------------------------------------------------------+
 //| FUNCTION DEFINITIONS    deinitialization function                |
@@ -165,7 +189,7 @@ void OnTick()
 
    DrawAccountInfo(StartCycleTime);
 
-   // Check for transition to Hedging Mode
+   // Check for transition to Hedging Mode Level 1
    if(!IsHedgingMode)
      {
       if(TotalLots(OP_BUY)>=MaxLots || TotalLots(OP_SELL)>=MaxLots)
@@ -178,9 +202,28 @@ void OnTick()
         }
      }
 
+   // Check for transition to Hedging Mode Level 2
+   if(IsHedgingMode && !IsHedgingMode2)
+     {
+      if(TotalLots(OP_BUY)>=MaxLots2 || TotalLots(OP_SELL)>=MaxLots2)
+        {
+         IsHedgingMode2=true;
+         Print("MaxLots2 reached. Switching to Hedging Mode Level 2 Scenario #3.");
+         DeleteAllPendingOrders(); // Clear Level 1 pending orders
+         ExecuteLock(); // Re-lock just in case
+        }
+     }
+
    if(IsHedgingMode)
      {
       // Scenario #2: Hedging Mode - Crisis Management
+      
+      double p_lot = 0;
+      double p_price = 0;
+      int lastType = 0;
+      double refPrice = 0;
+      int t1 = -1;
+      int t2 = -1;
       
       // Step 0: Ensure 1:1 Balance (Continuous Lock)
       double buyLots = TotalLots(OP_BUY, true); // Exclude shields from balance check
@@ -195,101 +238,163 @@ void OnTick()
         }
 
       // Maintain Pending Grid during Hedge (Dynamic Protection)
-      if(orderscnt(OP_BUYSTOP) == 0 && orderscnt(OP_SELLSTOP) == 0)
+      if(IsHedgingMode2)
         {
-         double p_lot = NormalizeDouble(MathMax(buyLots, sellLots) * 1.0, lot_digits); // Full protection (100%)
-         if(p_lot < MinLots) p_lot = MinLots;
-         double p_price;
-         int lastType = (int)LastCurrentOrderInfo("Type");
-         
-         if(lastType == OP_BUY) // Price went up, we locked with BUY, need SELLSTOP below
+         if((lotType2 == PENDING_AUTO && orderscnt(OP_BUYSTOP) == 0 && orderscnt(OP_SELLSTOP) == 0) ||
+            (lotType2 == PENDING_BUYSTOP && orderscnt(OP_BUYSTOP) == 0) ||
+            (lotType2 == PENDING_SELLSTOP && orderscnt(OP_SELLSTOP) == 0))
            {
-            p_price = LastCurrentOrderInfo("Price", OP_BUY) - Step * point;
-            int t1 = OrderSend(Symbol(), OP_SELLSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Shield", MagicNumber, 0, Red);
+            p_lot = NormalizeDouble(MathMax(buyLots, sellLots) * 1.0, lot_digits); // Full protection (100%)
+            if(p_lot < MinLots2) p_lot = MinLots2;
+            p_price = 0;
+            lastType = (int)LastCurrentOrderInfo("Type");
+            
+            bool placeBuyStop = false;
+            bool placeSellStop = false;
+            
+            if(lotType2 == PENDING_AUTO)
+              {
+               if(lastType == OP_BUY) placeSellStop = true;
+               else if(lastType == OP_SELL) placeBuyStop = true;
+              }
+            else if(lotType2 == PENDING_BUYSTOP)
+              {
+               placeBuyStop = true;
+              }
+            else if(lotType2 == PENDING_SELLSTOP)
+              {
+               placeSellStop = true;
+              }
+              
+            if(placeSellStop && orderscnt(OP_SELLSTOP) == 0)
+              {
+               refPrice = LastCurrentOrderInfo("Price", OP_BUY);
+               if(refPrice <= 0) refPrice = Bid;
+               p_price = refPrice - Step2 * point;
+               t1 = OrderSend(Symbol(), OP_SELLSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Shield", MagicNumber, 0, Red);
+               if(t1 < 0) Print("Open Sell Stop Level 2 Error: ", GetLastError());
+              }
+            else if(placeBuyStop && orderscnt(OP_BUYSTOP) == 0)
+              {
+               refPrice = LastCurrentOrderInfo("Price", OP_SELL);
+               if(refPrice <= 0) refPrice = Ask;
+               p_price = refPrice + Step2 * point;
+               t2 = OrderSend(Symbol(), OP_BUYSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Shield", MagicNumber, 0, Blue);
+               if(t2 < 0) Print("Open Buy Stop Level 2 Error: ", GetLastError());
+              }
            }
-         else if(lastType == OP_SELL) // Price went down, we locked with SELL, need BUYSTOP above
-           {
-            p_price = LastCurrentOrderInfo("Price", OP_SELL) + Step * point;
-            int t2 = OrderSend(Symbol(), OP_BUYSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Shield", MagicNumber, 0, Blue);
-           }
-        }
-
-      // Step 5: Exit Hedging Mode (Seamless Transition)
-      if(MathMax(buyLots, sellLots) <= MinLots + 0.001)
-        {
-         DeleteAllPendingOrders(); // Clear hedge pending orders
-         IsHedgingMode = false;
-         JustExitedHedge = true; // Signal main logic to use current price for next pending order
-         transfair = false; 
-         Print("Hedge reduction completed. Seamless transition to normal grid performed.");
-         return; 
         }
       else
         {
-         // Reduction Cycle (Step 2, 3, 4)
-         if(orderscnt() > 0 && (TimeCurrent() - LastCurrentOrderInfo("Time") >= WaitingMinutes * 60 || transfair))
+         if(orderscnt(OP_BUYSTOP) == 0 && orderscnt(OP_SELLSTOP) == 0)
            {
-            bool reduced = false;
-            datetime hedge_T1 = TimeCurrent();
-            double hedge_profit = 0;
+            p_lot = NormalizeDouble(MathMax(buyLots, sellLots) * 1.0, lot_digits); // Full protection (100%)
+            if(p_lot < MinLots) p_lot = MinLots;
+            p_price = 0;
+            lastType = (int)LastCurrentOrderInfo("Type");
             
-            double lastBuyPrice = LastCurrentOrderInfo("Price", OP_BUY);
-            double lastSellPrice = LastCurrentOrderInfo("Price", OP_SELL);
-
-            // Universal Reduction Logic: If price moves in favor of any side
-            if(buyLots > 0 && Bid - lastBuyPrice >= PipsToTransfair * point)
+            if(lastType == OP_BUY) // Price went up, we locked with BUY, need SELLSTOP below
               {
-               if(TotalProfit(OP_BUY) > 0)
-                 {
-                  CloseAll(OP_BUY);
-                  hedge_profit = TotalClosedProfit(hedge_T1, OP_BUY);
-                 }
-               else
-                 {
-                  int lastTicket_HB = (int)LastCurrentOrderInfo("Ticket", OP_BUY);
-                  if(lastTicket_HB > 0 && OrderSelect(lastTicket_HB, SELECT_BY_TICKET))
-                    {
-                     hedge_profit = OrderProfit() + OrderSwap() + OrderCommission();
-                     if(!OrderClose(lastTicket_HB, OrderLots(), Bid, 3*P)) hedge_profit = 0;
-                    }
-                 }
-               ClosePercentOfLoss(OP_SELL, hedge_profit);
-               reduced = true;
+               p_price = LastCurrentOrderInfo("Price", OP_BUY) - Step * point;
+               t1 = OrderSend(Symbol(), OP_SELLSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Shield", MagicNumber, 0, Red);
+               if(t1 < 0) Print("Open Sell Stop Level 1 Error: ", GetLastError());
               }
-            else if(sellLots > 0 && lastSellPrice - Ask >= PipsToTransfair * point)
+            else if(lastType == OP_SELL) // Price went down, we locked with SELL, need BUYSTOP above
               {
-               if(TotalProfit(OP_SELL) > 0)
-                 {
-                  CloseAll(OP_SELL);
-                  hedge_profit = TotalClosedProfit(hedge_T1, OP_SELL);
-                 }
-               else
-                 {
-                  int lastTicket_HS = (int)LastCurrentOrderInfo("Ticket", OP_SELL);
-                  if(lastTicket_HS > 0 && OrderSelect(lastTicket_HS, SELECT_BY_TICKET))
-                    {
-                     hedge_profit = OrderProfit() + OrderSwap() + OrderCommission();
-                     if(!OrderClose(lastTicket_HS, OrderLots(), Ask, 3*P)) hedge_profit = 0;
-                    }
-                 }
-               ClosePercentOfLoss(OP_BUY, hedge_profit);
-               reduced = true;
-              }
-
-            if(reduced)
-              {
-               transfair = false;
-               DeleteAllPendingOrders();
-               ExecuteLock(); // Re-Lock immediately
-               // The next tick will place the new pending grid order
+               p_price = LastCurrentOrderInfo("Price", OP_SELL) + Step * point;
+               t2 = OrderSend(Symbol(), OP_BUYSTOP, p_lot, NormalizeDouble(p_price, Digits), 3 * P, 0, 0, "Hedge Shield", MagicNumber, 0, Blue);
+               if(t2 < 0) Print("Open Buy Stop Level 1 Error: ", GetLastError());
               }
            }
-         return; // Bypass original grid logic while in Hedging Mode
         }
+
+      // Step 5: Exit Hedging Mode (Seamless Transition or Level 2 Downgrade)
+      if(IsHedgingMode2)
+        {
+         if(MathMax(buyLots, sellLots) <= MinLots2 + 0.001)
+           {
+            DeleteAllPendingOrders(); // Clear hedge Level 2 pending orders
+            IsHedgingMode2 = false;
+            Print("Hedge level 2 reduction completed. Returning to Hedge level 1.");
+            return; 
+           }
+        }
+      else
+        {
+         if(MathMax(buyLots, sellLots) <= MinLots + 0.001)
+           {
+            DeleteAllPendingOrders(); // Clear hedge pending orders
+            IsHedgingMode = false;
+            JustExitedHedge = true; // Signal main logic to use current price for next pending order
+            transfair = false; 
+            Print("Hedge reduction completed. Seamless transition to normal grid performed.");
+            return; 
+           }
+        }
+
+      // Reduction Cycle (Step 2, 3, 4)
+      if(orderscnt() > 0 && (TimeCurrent() - LastCurrentOrderInfo("Time") >= WaitingMinutes * 60 || transfair))
+        {
+         bool reduced = false;
+         datetime hedge_T1 = TimeCurrent();
+         double hedge_profit = 0;
+         
+         double lastBuyPrice = LastCurrentOrderInfo("Price", OP_BUY);
+         double lastSellPrice = LastCurrentOrderInfo("Price", OP_SELL);
+
+         // Universal Reduction Logic: If price moves in favor of any side
+         if(buyLots > 0 && Bid - lastBuyPrice >= PipsToTransfair * point)
+           {
+            if(TotalProfit(OP_BUY) > 0)
+              {
+               CloseAll(OP_BUY);
+               hedge_profit = TotalClosedProfit(hedge_T1, OP_BUY);
+              }
+            else
+              {
+               int lastTicket_HB = (int)LastCurrentOrderInfo("Ticket", OP_BUY);
+               if(lastTicket_HB > 0 && OrderSelect(lastTicket_HB, SELECT_BY_TICKET))
+                 {
+                  hedge_profit = OrderProfit() + OrderSwap() + OrderCommission();
+                  if(!OrderClose(lastTicket_HB, OrderLots(), Bid, 3*P)) hedge_profit = 0;
+                 }
+              }
+            ClosePercentOfLoss(OP_SELL, hedge_profit);
+            reduced = true;
+           }
+         else if(sellLots > 0 && lastSellPrice - Ask >= PipsToTransfair * point)
+           {
+            if(TotalProfit(OP_SELL) > 0)
+              {
+               CloseAll(OP_SELL);
+               hedge_profit = TotalClosedProfit(hedge_T1, OP_SELL);
+              }
+            else
+              {
+               int lastTicket_HS = (int)LastCurrentOrderInfo("Ticket", OP_SELL);
+               if(lastTicket_HS > 0 && OrderSelect(lastTicket_HS, SELECT_BY_TICKET))
+                 {
+                  hedge_profit = OrderProfit() + OrderSwap() + OrderCommission();
+                  if(!OrderClose(lastTicket_HS, OrderLots(), Ask, 3*P)) hedge_profit = 0;
+                 }
+              }
+            ClosePercentOfLoss(OP_BUY, hedge_profit);
+            reduced = true;
+           }
+
+         if(reduced)
+           {
+            transfair = false;
+            DeleteAllPendingOrders();
+            ExecuteLock(); // Re-Lock immediately
+            // The next tick will place the new pending grid order
+           }
+        }
+      return; // Bypass original grid logic while in Hedging Mode
      }
   
 
-   
+    
    double newLot,TP=0,SL=0,price,newLotPending,profit;
    datetime T1;
    int ticket;
@@ -737,6 +842,17 @@ void CreatePanel(string name,ENUM_OBJECT Type,string text,int XDistance,int YDis
       ObjectSetInteger(0,name,OBJPROP_BGCOLOR,BGColor_);
       ObjectSetInteger(0,name,OBJPROP_SELECTABLE,Obj_Selectable);
 
+      // Force drawing all text/button objects in the foreground (above candles)
+      // Background rectangle is placed behind text but still in front of candles
+      if(Type == OBJ_RECTANGLE_LABEL)
+        {
+         ObjectSetInteger(0,name,OBJPROP_BACK,true);
+        }
+      else
+        {
+         ObjectSetInteger(0,name,OBJPROP_BACK,false);
+        }
+
       if(Type==OBJ_EDIT)
         {
          ObjectSetInteger(0,name,OBJPROP_ALIGN,Align);
@@ -812,7 +928,7 @@ void DisableAllTakeProfits()
      {
       if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
         {
-         if(OrderSymbol()==Symbol() && OrderMagicNumber()==MagicNumber && OrderType()<=OP_SELL)
+         if(OrderSymbol()==Symbol() && MagicNumber==OrderMagicNumber() && OrderType()<=OP_SELL)
            {
             if(OrderTakeProfit() != 0)
               {
@@ -831,7 +947,7 @@ void DeleteAllPendingOrders()
      {
       if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
         {
-         if(OrderSymbol()==Symbol() && OrderMagicNumber()==MagicNumber && OrderType() > OP_SELL)
+         if(OrderSymbol()==Symbol() && MagicNumber==OrderMagicNumber() && OrderType() > OP_SELL)
            {
             bool res = OrderDelete(OrderTicket());
            }
