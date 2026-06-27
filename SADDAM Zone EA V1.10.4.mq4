@@ -221,7 +221,7 @@ void OnTick()
    // Check for transition to Hedging Mode
    if(!IsHedgingMode)
      {
-      if(TotalLots(OP_BUY)>=MaxLots || TotalLots(OP_SELL)>=MaxLots)
+      if(TotalLots(OP_BUY, true)>=MaxLots || TotalLots(OP_SELL, true)>=MaxLots)
         {
          IsHedgingMode=true;
          Print("MaxLots reached. Switching to Hedging Mode Scenario #2.");
@@ -632,27 +632,40 @@ double LotManage()
 void CloseAll(int type=-1)
   {
    bool found = true;
-   while(found)
+   int maxAttempts = 100;
+   while(found && maxAttempts > 0)
      {
       found = false;
+      maxAttempts--;
       for(int i=0; i<OrdersTotal(); i++)
         {
          if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES))
            {
             if(OrderSymbol()==Symbol() && OrderMagicNumber()==MagicNumber && (OrderType()==type || type==-1))
               {
-               found = true;
                if(OrderType()==OP_BUY)
                  {
-                  if(OrderClose(OrderTicket(),OrderLots(),Bid,3*P)) break;
+                  if(OrderClose(OrderTicket(),OrderLots(),Bid,3*P))
+                    {
+                     found = true;
+                     break;
+                    }
                  }
                else if(OrderType()==OP_SELL)
                  {
-                  if(OrderClose(OrderTicket(),OrderLots(),Ask,3*P)) break;
+                  if(OrderClose(OrderTicket(),OrderLots(),Ask,3*P))
+                    {
+                     found = true;
+                     break;
+                    }
                  }
                else
                  {
-                  if(OrderDelete(OrderTicket())) break;
+                  if(OrderDelete(OrderTicket()))
+                    {
+                     found = true;
+                     break;
+                    }
                  }
               }
            }
@@ -664,7 +677,7 @@ void CloseAll(int type=-1)
 //+------------------------------------------------------------------+
 double TotalClosedProfit(datetime time,int type)
   {
-   double profit;
+   double profit = 0.0;
    for(int i=OrdersHistoryTotal()-1;i>=0;i--)
      {
       bool select=OrderSelect(i,SELECT_BY_POS,MODE_HISTORY);
@@ -703,7 +716,7 @@ double TotalProfit(int type=-1)
 //+------------------------------------------------------------------+
 double TotalLots(int type, bool excludeShield = false)
   {
-   double lots;
+   double lots = 0.0;
    for(int i=OrdersTotal()-1;i>=0;i--)
      {
       bool select=OrderSelect(i,SELECT_BY_POS,MODE_TRADES);
@@ -727,16 +740,17 @@ void ClosePercentOfLoss(int type,double closedprofit)
    double lotsToClose=TotalLots(type);
 
    bool found = true;
-   while(found && profitToclose > 0)
+   int maxAttempts = 100;
+   while(found && profitToclose > 0 && maxAttempts > 0)
      {
       found = false;
+      maxAttempts--;
       for(int i=0; i<OrdersTotal(); i++)
         {
          if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES))
            {
             if(OrderSymbol()==Symbol() && OrderMagicNumber()==MagicNumber && OrderType()==type)
               {
-               found = true;
                double orderprofit=OrderProfit() + OrderSwap() + OrderCommission();
                double percentOfLotsToClose=MathAbs(profitToclose/orderprofit)*100;
                double lots;
@@ -760,6 +774,7 @@ void ClosePercentOfLoss(int type,double closedprofit)
                if(close_success)
                  {
                   profitToclose+=orderprofit;
+                  found = true;
                   break;
                  }
               }
@@ -835,22 +850,24 @@ void CloseVolume(int type, double volumeToClose)
 {
    double remaining = volumeToClose;
    bool found = true;
-   while(found && remaining > 0.0001)
+   int maxAttempts = 100;
+   while(found && remaining > 0.0001 && maxAttempts > 0)
    {
       found = false;
+      maxAttempts--;
       for(int i = 0; i < OrdersTotal(); i++)
       {
          if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
          {
             if(OrderSymbol() == Symbol() && OrderMagicNumber() == MagicNumber && OrderType() == type)
             {
-               found = true;
                double currentLot = OrderLots();
                if(currentLot <= remaining + 0.0001)
                {
                   if(OrderClose(OrderTicket(), currentLot, OrderClosePrice(), 3 * P, clrWhite))
                   {
                      remaining -= currentLot;
+                     found = true;
                      break;
                   }
                }
@@ -859,6 +876,7 @@ void CloseVolume(int type, double volumeToClose)
                   if(OrderClose(OrderTicket(), NormalizeDouble(remaining, lot_digits), OrderClosePrice(), 3 * P, clrWhite))
                   {
                      remaining = 0;
+                     found = true;
                      break;
                   }
                }
